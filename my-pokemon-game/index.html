@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>テンモン 挑め四天王！</title>
+    <style>
+        /* ゲームボーイ風ドットフォントの読み込み */
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+
+        body { background-color: #1a1a1a; color: white; font-family: 'Arial', sans-serif; text-align: center; margin: 0; padding: 0; overflow: hidden; }
+        #game-container { position: relative; width: 1000px; height: 600px; margin: 20px auto; border: 4px solid #fff; background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        canvas { position: absolute; top: 0; left: 0; }
+        
+        /* 共通画面スタイル */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 1000px; height: 600px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.85); z-index: 10;
+        }
+        button { padding: 15px 40px; font-size: 20px; font-weight: bold; color: #fff; background: linear-gradient(45deg, #ff416c, #ff4b2b); border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 5px 15px rgba(255, 65, 108, 0.4); transition: all 0.2s ease; }
+        button:hover { transform: scale(1.05); box-shadow: 0 8px 25px rgba(255, 65, 108, 0.6); }
+        .hidden { display: none !important; }
+
+        /* タイトル画面 */
+        #title-screen { background-color: #1a1a1a; }
+        .title-image { max-width: 80%; max-height: 40vh; border-radius: 10px; box-shadow: 0 0 20px rgba(0, 0, 0, 0.7); margin-bottom: 10px; }
+        
+        /* 主人公セレクター */
+        .player-select-container { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; background: rgba(255,255,255,0.1); padding: 15px 30px; border-radius: 10px; border: 2px solid #555; }
+        .select-arrow { font-size: 32px; cursor: pointer; user-select: none; color: #ff4b2b; font-weight: bold; transition: transform 0.1s; }
+        .select-arrow:hover { transform: scale(1.2); }
+        .selected-player-box { width: 160px; text-align: center; }
+        .selected-player-img { width: 90px; height: 90px; object-fit: contain; background: #222; border: 3px solid #fff; border-radius: 10px; }
+        .selected-player-name { font-size: 20px; font-weight: bold; margin-top: 5px; color: #f1c40f; }
+
+        /* 🎒 手持ち画面 */
+        #party-screen { background-color: #f8f8f8; color: #222222; font-family: 'DotGothic16', monospace; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; }
+        .pokemon-list { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; justify-content: center; width: 900px; margin: 0 auto; }
+        .pokemon-row { display: flex; align-items: center; height: 65px; font-size: 26px; position: relative; cursor: pointer; text-align: left; }
+        .cursor { width: 40px; visibility: hidden; font-size: 28px; text-align: center; color: #222; }
+        .pokemon-row.active .cursor { visibility: visible; }
+        .pkmn-icon-container { height: 60px; width: 110px; border: 3px solid #222222; margin-right: 20px; display: flex; justify-content: center; align-items: center; background-color: #fff; overflow: hidden; box-sizing: border-box; flex-shrink: 0; }
+        .pkmn-icon { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+        .pkmn-info { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+        .pkmn-name-lv { display: flex; justify-content: flex-start; align-items: center; }
+        .pkmn-lv { margin-left: 2em; }
+        .hp-container { display: flex; align-items: center; font-size: 20px; margin-top: 2px; }
+        .hp-label { font-size: 16px; margin-right: 10px; font-weight: bold; }
+        .hp-bar-bg { width: 220px; height: 10px; background-color: transparent; border: 3px solid #222222; position: relative; }
+        .hp-bar-fill { height: 100%; background-color: #222222; }
+        .hp-text { margin-left: 20px; font-size: 20px; }
+        #party-screen .bottom-container { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-shrink: 0; width: 900px; margin: 10px auto 0 auto; }
+        .message-window { height: 90px; border: 8px double #222222; background-color: #f8f8f8; padding: 10px 20px; box-sizing: border-box; font-size: 26px; line-height: 1.3; flex-grow: 1; text-align: left; }
+        .party-confirm-hint { font-size: 14px; color: #666; margin-top: 2px; }
+
+        /* ⚔️ じゃんけんバトル画面 */
+        #battle-screen { background: rgba(50, 50, 50, 0.9); }
+        .battle-field { display: flex; justify-content: space-between; align-items: center; width: 960px; height: 420px; border: 4px solid #555; border-radius: 10px; padding: 20px; box-sizing: border-box; background: rgba(0,0,0,0.4); position: relative; }
+        .monster-box { text-align: center; width: 380px; transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease; position: relative; }
+        .monster-img { width: 360px; height: 260px; object-fit: cover; background: rgba(255,255,255,0.05); border-radius: 8px; }
+        .user-info-block { position: absolute; top: -20px; display: flex; flex-direction: column; align-items: center; z-index: 5; }
+        #p1UserBlock { left: 10px; }
+        #p2UserBlock { right: 10px; }
+        .user-avatar { width: 70px; height: 70px; object-fit: contain; border-radius: 50%; border: 3px solid #fff; background: #222; }
+        .user-name-tag { background: rgba(0, 0, 0, 0.8); padding: 4px 12px; border-radius: 4px; font-size: 14px; font-weight: bold; margin-top: 4px; border: 1px solid #888; }
+        .hand-display { font-size: 32px; margin-top: 10px; height: 40px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
+        #vsText { font-size: 50px; font-weight: bold; color: #ff416c; text-shadow: 2px 2px 4px rgba(0,0,0,0.6); }
+        #battle-screen .bottom-container { margin-top: 10px; display: flex; align-items: center; gap: 20px; height: 70px; }
+        .instructions { font-size: 18px; text-align: center; background: rgba(0, 0, 0, 0.8); padding: 10px 20px; border-radius: 5px; border: 1px solid #444; }
+
+        /* 勝敗演出クラス */
+        .winner-p1 { transform: translate(250px, -10px) scale(1.2); z-index: 10; }
+        .winner-p2 { transform: translate(-250px, -10px) scale(1.2); z-index: 10; }
+        .loser { opacity: 0.15; transform: scale(0.7); }
+        .result-banner { position: absolute; top: 15%; left: 50%; transform: translate(-50%, -50%) scale(0); font-size: 70px; font-weight: bold; z-index: 20; transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); pointer-events: none; text-shadow: 0 0 10px rgba(0,0,0,0.9); }
+        .result-banner.show { transform: translate(-50%, -50%) scale(1); }
+        .color-winner { color: #4cd137; }
+        .color-lose { color: #e84118; }
+
+        /* クリア画面 */
+        #clear-screen { background: linear-gradient(135deg, #98fb7a, #6bdc9a); }
+        #clear-screen h2 { font-size: 48px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); animation: pulse 2s infinite; }
+    </style>
+</head>
+<body>
+
+    <h1 style="margin: 10px 0; font-size: 28px;">テンモン 挑め四天王！</h1>
+    
+    <div id="game-container">
+        <canvas id="gameCanvas" width="1000" height="600"></canvas>
+
+        <div id="title-screen" class="screen">
+            <img src="assets/背景1.jpg" alt="MONSTER BATTLE" class="title-image" onerror="this.style.display='none'; document.getElementById('title-fallback').style.display='block';">
+            <h1 id="title-fallback" style="display:none; color: #fff; font-size: 48px; margin-bottom: 20px; text-shadow: 0 0 10px #ff416c;">MONSTER BATTLE</h1>
+            
+            <div class="player-select-container">
+                <div class="select-arrow" onclick="changeSelectedPlayer(-1)">◀</div>
+                <div class="selected-player-box">
+                    <img id="title-player-img" src="" alt="主人公" class="selected-player-img">
+                    <div id="title-player-name" class="selected-player-name">---</div>
+                </div>
+                <div class="select-arrow" onclick="changeSelectedPlayer(1)">▶</div>
+            </div>
+
+            <button class="start-button" onclick="startGame()">START</button>
+        </div>
+
+        <div id="party-screen" class="screen hidden">
+            <div class="pokemon-list" id="pokemonList"></div>
+            <div class="bottom-container">
+                <div class="message-window" id="messageWindow">
+                    ポケモンを えらんでください。
+                    <div class="party-confirm-hint">【↑/↓】選択  【Enter】決定 / 枠クリックでも選択可</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="battle-screen" class="screen hidden">
+            <div class="result-banner" id="resultBanner"></div>
+            <h2 id="stage-title" style="margin: 0 0 10px 0; font-size: 24px; color: #f1c40f;">第1戦目: 四天王戦</h2>
+            
+            <div class="battle-field">
+                <div class="monster-box" id="p1Box">
+                    <div class="user-info-block" id="p1UserBlock">
+                        <img id="battle-player-avatar" src="assets/player.jpg" alt="あなた" class="user-avatar">
+                        <div id="battle-player-name-tag" class="user-name-tag">PLAYER</div>
+                    </div>
+                    <img id="battle-player-monster-img" src="assets/player.jpg" alt="味方モンスター" class="monster-img">
+                    <div class="hand-display" id="p1Hand">？</div>
+                </div>
+
+                <div id="vsText">VS</div>
+
+                <div class="monster-box" id="p2Box">
+                    <div class="user-info-block" id="p2UserBlock">
+                        <img id="battle-enemy-avatar" src="" alt="敵" class="user-avatar" onerror="this.src='https://placehold.co/100x100?text=Enemy'">
+                        <div id="battle-enemy-name-tag" class="user-name-tag">ENEMY</div>
+                    </div>
+                    <img id="battle-enemy-monster-img" src="" alt="敵" class="monster-img">
+                    <div class="hand-display" id="p2Hand">？</div>
+                </div>
+            </div>
+
+            <div class="bottom-container">
+                <div class="instructions" id="infoText">
+                    キーボードのキーを押して手を選べ！<br>
+                    <strong>【 ← 】グー   【 ↑ 】チョキ   【 → 】パー</strong>
+                </div>
+                <button id="nextTransitionBtn" style="display:none;" onclick="proceedAfterBattle()">次へ進む</button>
+            </div>
+        </div>
+
+        <div id="clear-screen" class="screen hidden">
+            <h2>🎉 殿堂入りおめでとう！ 🎉</h2>
+            <p style="font-size: 20px; margin-bottom: 20px;">すべての四天王とチャンピオンを打ち破った！</p>
+            <button onclick="changeState('TITLE')">タイトルへ戻る</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let gameState = "TITLE";
+        let currentStage = 1;
+
+        // 主人公選択用設定
+        const playerFiles = ["player1.png", "player2.png", "player3.png"]; 
+        let selectedPlayerIndex = 0;
+        let currentPlayerName = "";
+        let currentPlayerSrc = "";
+
+        // 手持ちシステム用設定
+        const partyData = [
+            { name: "たまご(赤)", img: "Egg1.jpg", lv: "Lv100", hp: "759/759" },
+            { name: "たまご(青)", img: "Egg2.jpg", lv: "Lv100", hp: "759/759" },
+            { name: "たまご(緑)", img: "Egg3.jpg", lv: "Lv100", hp: "759/759" },
+            { name: "たまご(赤)", img: "Egg1.jpg", lv: "Lv100", hp: "759/759" },
+            { name: "たまご(赤)", img: "Egg2.jpg", lv: "Lv100", hp: "759/759" },
+            { name: "たまご(赤)", img: "Egg3.jpg", lv: "Lv100", hp: "759/759" }
+        ];
+        let currentPartyIndex = 0;
+        let activePartyAnimation = null;
+        let selectedMonsterImg = "";
+
+        // じゃんけんシステム用変数
+        const HANDS = {
+            'ArrowLeft':  { name: 'グー',  emoji: '✊', beats: 'ArrowUp' },
+            'ArrowUp':    { name: 'チョキ', emoji: '✌️', beats: 'ArrowRight' },
+            'ArrowRight': { name: 'パー',  emoji: '🖐️', beats: 'ArrowLeft' }
+        };
+        const handKeys = Object.keys(HANDS);
+        let isJankenOver = false;
+        let battleResult = ""; 
+
+        // マップ上テキスト表示用
+        let mapMessage = "";
+        let messageTimer = 0;
+        let isStaticMessage = false;
+
+        // ボイス用
+        let currentAudio = null;
+
+        // 🎵 BGM管理
+        const bgm = {
+            map: new Audio("assets/bgm_map.mp3"),
+            battle: new Audio("assets/bgm_battle.mp3")
+        };
+        bgm.map.loop = true;
+        bgm.battle.loop = true;
+        bgm.map.volume = 0.5;
+        bgm.battle.volume = 0.5;
+
+        function stopAllBGM() {
+            bgm.map.pause();
+            bgm.map.currentTime = 0;
+            bgm.battle.pause();
+            bgm.battle.currentTime = 0;
+        }
+
+        const player = { x: 430, y: 460, speed: 5, size: 140 };
+        const enemy = { x: 430, y: 120, size: 140 };
+
+        const enemyPool = ["カンナ", "シバ", "キクコ", "ワタル"];
+        let availableEnemies = [];
+        const championName = "シゲル";
+
+        let currentEnemyName = ""; 
+        let currentEnemyImage = null;
+
+        const dialogueTemplates = [
+            " 私の自慢のチームに勝てるかな？",
+            " ここまで来られたのも運が良かっただけさ！",
+            " ここからが本当の地獄だ。覚悟しろ！",
+            " 四天王最後の壁、私が引導を渡してやろう！"
+        ];
+
+        const images = { player: new Image(), maps: {} };
+        for(let i=1; i<=5; i++) {
+            images.maps[i] = new Image();
+            images.maps[i].src = `assets/map${i}.jpg`;
+        }
+
+        function playSelectSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.08);
+            } catch(e) {}
+        }
+
+        function updateTitlePlayerDisplay() {
+            const fileName = playerFiles[selectedPlayerIndex];
+            currentPlayerName = fileName.split('.')[0].toUpperCase();
+            currentPlayerSrc = `assets/${fileName}`;
+            
+            document.getElementById("title-player-img").src = currentPlayerSrc;
+            document.getElementById("title-player-name").innerText = currentPlayerName;
+        }
+
+        function changeSelectedPlayer(dir) {
+            selectedPlayerIndex = (selectedPlayerIndex + dir + playerFiles.length) % playerFiles.length;
+            updateTitlePlayerDisplay();
+            playSelectSound();
+        }
+
+        function initPartyDOM() {
+            const listEl = document.getElementById("pokemonList");
+            listEl.innerHTML = "";
+            partyData.forEach((pkmn, idx) => {
+                const row = document.createElement("div");
+                row.className = `pokemon-row ${idx === 0 ? 'active' : ''}`;
+                row.setAttribute("data-index", idx);
+                row.innerHTML = `
+                    <div class="cursor">▶</div>
+                    <div class="pkmn-icon-container">
+                        <img class="pkmn-icon" src="assets/${pkmn.img}" alt="${pkmn.name}">
+                    </div>
+                    <div class="pkmn-info">
+                        <div class="pkmn-name-lv"><span class="pkmn-name">${pkmn.name}</span><span class="pkmn-lv">${pkmn.lv}</span></div>
+                        <div class="hp-container">
+                            <span class="hp-label">HP:</span>
+                            <div class="hp-bar-bg"><div class="hp-bar-fill" style="width: 100%;"></div></div>
+                            <span class="hp-text">${pkmn.hp}</span>
+                        </div>
+                    </div>
+                `;
+                row.addEventListener("click", () => {
+                    currentPartyIndex = idx;
+                    updatePartyCursor();
+                });
+                row.addEventListener("dblclick", () => {
+                    confirmPartySelection();
+                });
+                listEl.appendChild(row);
+            });
+            updatePartyCursor();
+        }
+
+        function updatePartyCursor() {
+            if (activePartyAnimation) {
+                activePartyAnimation.cancel();
+                activePartyAnimation = null;
+            }
+            const rows = document.querySelectorAll('.pokemon-row');
+            rows.forEach((row, i) => {
+                const iconContainer = row.querySelector('.pkmn-icon-container');
+                if (i === currentPartyIndex) {
+                    row.classList.add('active');
+                    const pkmnName = row.querySelector('.pkmn-name').innerText;
+                    document.getElementById('messageWindow').innerHTML = `${pkmnName}に<br>決める？ <span style="font-size:14px;color:#666;">(Enterキーで戦闘へ)</span>`;
+                    
+                    activePartyAnimation = iconContainer.animate({
+                        borderColor: ['#409EFF', '#FF409E', '#409EFF']
+                    }, {
+                        duration: 1500,
+                        iterations: Infinity,
+                        direction: 'normal',
+                        easing: 'ease-in-out'
+                    });
+                } else {
+                    row.classList.remove('active');
+                    iconContainer.style.borderColor = '';
+                }
+            });
+            playSelectSound();
+        }
+
+        function confirmPartySelection() {
+            selectedMonsterImg = `assets/${partyData[currentPartyIndex].img}`;
+            setupBattleUI();
+            changeState("BATTLE");
+        }
+
+        window.addEventListener("keydown", e => {
+            keys[e.key] = true;
+            
+            if (gameState === "PARTY") {
+                if (e.key === 'ArrowUp') {
+                    currentPartyIndex = (currentPartyIndex === 0) ? partyData.length - 1 : currentPartyIndex - 1;
+                    updatePartyCursor();
+                    e.preventDefault();
+                } else if (e.key === 'ArrowDown') {
+                    currentPartyIndex = (currentPartyIndex === partyData.length - 1) ? 0 : currentPartyIndex + 1;
+                    updatePartyCursor();
+                    e.preventDefault();
+                } else if (e.key === 'Enter') {
+                    confirmPartySelection();
+                    e.preventDefault();
+                }
+            }
+            
+            if (gameState === "BATTLE" && !isJankenOver && HANDS[e.key]) {
+                executeJanken(e.key);
+            }
+        });
+        window.addEventListener("keyup", e => keys[e.key] = false);
+        const keys = {};
+
+        // マップ会話スキップクリック -> 手持ち（たまご選択）画面へ
+        canvas.addEventListener("click", () => {
+            if (gameState === "TALK") {
+                isStaticMessage = false;
+                initPartyDOM();
+                changeState("PARTY"); // bgm.map は流れたまま遷移
+            }
+        });
+
+        function startGame() {
+            images.player.src = currentPlayerSrc;
+            currentStage = 1;
+            // ★ 追加：敵プールをリセット（シャッフルして使い切る準備）
+            availableEnemies = [...enemyPool];
+            resetPositions();
+            setupNextEnemy();
+            changeState("MAP");
+            setMapMessage(`${currentStage}人目の 四天王が 待っている！`, 180);
+        }
+
+        function resetPositions() {
+            player.x = 430;
+            player.y = 460;
+        }
+
+        function setupNextEnemy() {
+    if (currentStage < 5) {
+        // ★ 修正：残りプール（availableEnemies）からランダムにインデックスを選択
+        const randomIndex = Math.floor(Math.random() * availableEnemies.length);
+        
+        // ★ 修正：選ばれた敵を配列から抜き出して、currentEnemyName に代入
+        currentEnemyName = availableEnemies.splice(randomIndex, 1)[0];
+    } else {
+        currentEnemyName = championName;
+    }
+    currentEnemyImage = new Image();
+    currentEnemyImage.src = `assets/${currentEnemyName}.png`;
+}
+
+        function setupBattleUI() {
+            isJankenOver = false;
+            battleResult = "";
+            document.getElementById('vsText').style.visibility = 'visible';
+            document.getElementById('resultBanner').className = 'result-banner';
+            document.getElementById('p1Box').className = 'monster-box';
+            document.getElementById('p2Box').className = 'monster-box';
+            document.getElementById('p1Hand').innerText = '？';
+            document.getElementById('p2Hand').innerText = '？';
+            document.getElementById('nextTransitionBtn').style.display = 'none';
+            document.getElementById('infoText').innerHTML = `キーボードのキーを押して手を選べ！<br><strong>【 ← 】グー   【 ↑ 】チョキ   【 → 】パー</strong>`;
+
+            document.getElementById('stage-title').innerText = currentStage === 5 ? "最終決戦: チャンピオン戦" : `第 ${currentStage} 戦目: 四天王戦`;
+            document.getElementById('battle-player-avatar').src = currentPlayerSrc;
+            document.getElementById('battle-player-name-tag').innerText = currentPlayerName;
+            document.getElementById('battle-player-monster-img').src = selectedMonsterImg;
+            document.getElementById('battle-enemy-avatar').src = `assets/${currentEnemyName}.png`;
+            document.getElementById('battle-enemy-monster-img').src = `assets/${currentEnemyName}M.png`;
+            document.getElementById('battle-enemy-name-tag').innerText = currentEnemyName;
+        }
+
+        function stopCurrentAudio() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+                currentAudio = null;
+            }
+        }
+
+        function setMapMessage(text, timer = 0) {
+            mapMessage = text;
+            messageTimer = timer;
+            isStaticMessage = (timer === 0);
+        }
+
+        // 🔄 画面遷移コントロール
+        function changeState(state) {
+            gameState = state;
+            document.getElementById("title-screen").classList.add("hidden");
+            document.getElementById("party-screen").classList.add("hidden");
+            document.getElementById("battle-screen").classList.add("hidden");
+            document.getElementById("clear-screen").classList.add("hidden");
+
+            if (state === "TITLE") {
+                stopAllBGM();
+                stopCurrentAudio();
+                document.getElementById("title-screen").classList.remove("hidden");
+            }
+            if (state === "MAP") {
+                bgm.battle.pause();
+                // 都度リセットして最初からループ再生
+                bgm.map.currentTime = 0;
+                bgm.map.play().catch(e => console.log("BGM play blocked:", e));
+            }
+            if (state === "PARTY") {
+                // ここでは bgm.map を止めずに、たまご選択画面を表示
+                document.getElementById("party-screen").classList.remove("hidden");
+            }
+            if (state === "BATTLE") {
+                bgm.map.pause();
+                stopCurrentAudio(); // 残っているボイスがあれば停止
+                // バトルBGMを都度リセットして最初からループ再生
+                bgm.battle.currentTime = 0;
+                bgm.battle.play().catch(e => console.log("BGM play blocked:", e));
+                document.getElementById("battle-screen").classList.remove("hidden");
+            }
+            if (state === "CLEAR") {
+                stopAllBGM();
+                stopCurrentAudio();
+                document.getElementById("clear-screen").classList.remove("hidden");
+            }
+        }
+
+        function executeJanken(p1Key) {
+            const p2Key = handKeys[Math.floor(Math.random() * handKeys.length)];
+
+            const p1HandEl = document.getElementById('p1Hand');
+            const p2HandEl = document.getElementById('p2Hand');
+            const p1Box = document.getElementById('p1Box');
+            const p2Box = document.getElementById('p2Box');
+            const banner = document.getElementById('resultBanner');
+            const infoText = document.getElementById('infoText');
+
+            p1HandEl.innerText = HANDS[p1Key].emoji + ' ' + HANDS[p1Key].name;
+            p2HandEl.innerText = HANDS[p2Key].emoji + ' ' + HANDS[p2Key].name;
+
+            if (p1Key === p2Key) {
+                infoText.innerHTML = "<span style='color: #ffcc00; font-weight:bold;'>あいこ！ もう一度キーを押せ！</span>";
+            } else {
+                isJankenOver = true;
+                document.getElementById('vsText').style.visibility = 'hidden';
+
+                if (HANDS[p1Key].beats === p2Key) {
+                    p1Box.classList.add('winner-p1');
+                    p2Box.classList.add('loser');
+                    infoText.innerHTML = "<span style='color: #4cd137; font-weight:bold;'>勝利！次のステージへ進もう！</span>";
+                    banner.innerText = "WINNER！";
+                    banner.className = 'result-banner show color-winner';
+                    battleResult = "win";
+                } else {
+                    p2Box.classList.add('winner-p2');
+                    p1Box.classList.add('loser');
+                    infoText.innerHTML = "<span style='color: #e84118; font-weight:bold;'>目の前がまっくらになった...タイトルに戻る。</span>";
+                    banner.innerText = "LOSE...";
+                    banner.className = 'result-banner show color-lose';
+                    battleResult = "lose";
+                }
+                document.getElementById('nextTransitionBtn').style.display = 'inline-block';
+                document.getElementById('nextTransitionBtn').innerText = battleResult === "win" ? "次のマップへ" : "タイトルへ...";
+            }
+        }
+
+        function proceedAfterBattle() {
+            if (battleResult === 'win') {
+                if (currentStage < 5) {
+                    currentStage++;
+                    resetPositions();
+                    setupNextEnemy();
+                    changeState("MAP");
+                    if (currentStage === 5) {
+                        setMapMessage(`ついに最後だ！ チャンピオン ${currentEnemyName} が待っている！`, 180);
+                    } else {
+                        setMapMessage(`${currentStage}人目の四天王が待っている！`, 180);
+                    }
+                } else {
+                    changeState("CLEAR");
+                }
+            } else {
+                changeState("TITLE");
+            }
+        }
+
+        function checkCollision(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.size &&
+                   obj1.x + obj1.size > obj2.x &&
+                   obj1.y < obj2.y + obj2.size &&
+                   obj1.y + obj1.size > obj2.y;
+        }
+
+        function gameLoop() {
+            if (gameState === "MAP") {
+                if (keys["ArrowUp"] || keys["w"]) player.y -= player.speed;
+                if (keys["ArrowDown"] || keys["s"]) player.y += player.speed;
+                if (keys["ArrowLeft"] || keys["a"]) player.x -= player.speed;
+                if (keys["ArrowRight"] || keys["d"]) player.x += player.speed;
+
+                player.x = Math.max(0, Math.min(canvas.width - player.size, player.x));
+                player.y = Math.max(0, Math.min(canvas.height - player.size, player.y));
+
+                if (messageTimer > 0) messageTimer--;
+
+                if (checkCollision(player, enemy)) {
+                    for (let key in keys) keys[key] = false;
+                    gameState = "TALK";
+                    
+                    stopCurrentAudio();
+                    
+                    // エンカウント時: bgm.map を止めずに四天王のボイスを被せて再生
+                    currentAudio = new Audio(`assets/${currentEnemyName}.mp3`);
+                    currentAudio.play().catch(e => console.log("Audio play blocked:", e));
+                    
+                    let dialogue = currentStage === 5 
+                        ? `${currentEnemyName}「私が最高峰のトレーナー、チャンピオンだ！」`
+                        : `${currentEnemyName}「${dialogueTemplates[currentStage - 1]}」`;
+                    setMapMessage(dialogue, 0);
+                }
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === "MAP" || gameState === "TALK") {
+                if (images.maps[currentStage].complete) {
+                    ctx.drawImage(images.maps[currentStage], 0, 0, canvas.width, canvas.height);
+                } else {
+                    ctx.fillStyle = "#333";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+
+                if (currentEnemyImage && currentEnemyImage.complete) {
+                    ctx.drawImage(currentEnemyImage, enemy.x, enemy.y, enemy.size, enemy.size);
+                } else {
+                    ctx.fillStyle = "red";
+                    ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
+                }
+
+                if (images.player.complete) {
+                    ctx.drawImage(images.player, player.x, player.y, player.size, player.size);
+                } else {
+                    ctx.fillStyle = "cyan";
+                    ctx.fillRect(player.x, player.y, player.size, player.size);
+                }
+
+                if (gameState === "TALK") {
+                    if (currentEnemyImage && currentEnemyImage.complete) {
+                        ctx.drawImage(currentEnemyImage, 300, 50, 400, 400);
+                    }
+                }
+
+                if (isStaticMessage || messageTimer > 0) {
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(150, 470, 700, 110);
+                    ctx.strokeStyle = "white";
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(155, 475, 690, 100);
+                    
+                    ctx.fillStyle = "white";
+                    ctx.font = "20px sans-serif";
+                    ctx.fillText(mapMessage, 180, 525);
+
+                    if (gameState === "TALK") {
+                        ctx.font = "14px sans-serif";
+                        ctx.fillStyle = "#f1c40f";
+                        ctx.fillText("▼ 画面クリックでたまごを選ぶ", 630, 560);
+                    }
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        updateTitlePlayerDisplay();
+        gameLoop();
+    </script>
+</body>
+</html>
