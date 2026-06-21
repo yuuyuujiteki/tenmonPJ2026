@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>テンモンGO</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* ゲームメイン画面（スマホの比率を意識） */
+        .game-container {
+            width: 100%;
+            max-width: 450px;
+            height: 100vh;
+            max-height: 800px;
+            position: relative;
+            background-image: url('背景.jpg');
+            background-size: cover;
+            background-position: center;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            perspective: 500px; /* 3D効果のための奥行き設定 */
+        }
+
+        /* 上部UI：メッセージと抽選ボタン */
+        .top-ui {
+            position: absolute;
+            top: 20px;
+            left: 5%;
+            width: 90%;
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 15px;
+            padding: 15px;
+            box-sizing: border-box;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        .message {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            min-height: 24px;
+            white-space: pre-line; /* 改行を有効にする */
+        }
+
+        button {
+            font-size: 16px;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 20px;
+            border: none;
+            background: #ffcb05;
+            color: #1d2c5e;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #c79a00;
+            transition: transform 0.1s;
+        }
+        button:active {
+            transform: translateY(2px);
+        }
+
+        /* 中央：モンスター表示エリア */
+        .stage {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .monster-img {
+            max-width: 55%;
+            max-height: 35%;
+            object-fit: contain;
+            display: none; /* 初期状態は非表示 */
+            filter: drop-shadow(0px 10px 5px rgba(0,0,0,0.3));
+            animation: bounce 2s infinite alternate;
+            transform: translateZ(0);
+            border-radius: 20px;    /* 角の丸みの半径（数値を大きくするとさらに丸くなります） */
+            overflow: hidden;
+        }
+
+        /* 下部UI：モンスターボールの丸い外枠コンテナ */
+        .ball-container {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%); /* 初期位置は横中央 */
+            width: 80px;
+            height: 80px;
+            z-index: 5;
+            cursor: grab;
+            display: none; /* 初期状態は非表示 */
+            touch-action: none; /* スマホでのスクロールを防止 */
+            
+            border-radius: 50%; /* 完全な正円にする */
+            overflow: hidden;   /* 円からはみ出た四角い画像をカット */
+            box-shadow: 0px 8px 10px rgba(0,0,0,0.4); /* 円に合わせた綺麗な影 */
+            
+            /* 中の画像を中央に固定する設定 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .ball-container:active {
+            cursor: grabbing;
+        }
+
+        /* ボール画像：200%に拡大し、枠のド真ん中に配置 */
+        .ball-img {
+            width: 165%;
+            height: 165%;
+            object-fit: cover;
+            flex-shrink: 0; /* 画像が潰されるのを防ぐ */
+            pointer-events: none; /* 画像自体へのタッチ干渉を防ぐ */
+        }
+
+        /* モンスターの浮遊アニメーション */
+        @keyframes bounce {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-15px); }
+        }
+
+        /* ボールが奥に飛んでいく3Dアニメーション */
+        @keyframes throwBall {
+            0% {
+                /* 初期位置（横中央揃えを維持） */
+                transform: translateX(-50%) translate(0, 0) scale(1) translateZ(0);
+                opacity: 1;
+            }
+            70% {
+                /* 飛行途中（少し手前に迫ってから奥へ） */
+                transform: translateX(-50%) translate(calc(var(--x) * 1.3), calc(var(--y) * 1.3)) scale(0.3) translateZ(-200px);
+                opacity: 1;
+            }
+            100% {
+                /* 目的地（小さくなって消える） */
+                transform: translateX(-50%) translate(var(--x), var(--y)) scale(0.2) translateZ(-300px);
+                opacity: 0;
+            }
+        }
+
+        /* 投げた時にJavaScriptから付与されるクラス */
+        .throwing {
+            animation: throwBall 0.6s forwards ease-out;
+            pointer-events: none; /* 飛行中は触れないようにする */
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container" id="game-container">
+    <div class="top-ui">
+        <div class="message" id="msg">まわりを探してみよう！</div>
+        <button id="search-btn">見渡す</button>
+    </div>
+
+    <div class="stage">
+        <img src="" alt="モンスター" class="monster-img" id="monster">
+    </div>
+
+    <div class="ball-container" id="ball">
+        <img src="モンスターボール.jpg" alt="モンスターボール" class="ball-img">
+    </div>
+</div>
+
+<script>
+// 1. データ定義（画像名と捕獲率）
+const monsterList = [
+    { name: "たまご", file: "Egg1.jpg", rate: 0.4 },
+    { name: "たまご", file: "Egg2.jpg", rate: 0.7 }
+];
+
+let currentMonster = null;
+let isDragging = false;
+let startX = 0;
+let startY = 0;
+
+const searchBtn = document.getElementById("search-btn");
+const monsterImg = document.getElementById("monster");
+const msgArea = document.getElementById("msg");
+const ball = document.getElementById("ball");
+const container = document.getElementById("game-container");
+
+// 2. 抽選ボタンを押したときの処理
+searchBtn.addEventListener("click", () => {
+    // ランダムにモンスターを選択
+    const randomIndex = Math.floor(Math.random() * monsterList.length);
+    currentMonster = monsterList[randomIndex];
+    
+    // モンスター画像を表示
+    monsterImg.src = currentMonster.file;
+    monsterImg.style.display = "block";
+    
+    // ボールを初期位置・初期状態で表示
+    ball.style.display = "flex"; /* style.cssのflex設定を活かすためflexにする */
+    ball.style.transform = "translateX(-50%)";
+    ball.classList.remove("throwing");
+    
+    // UIの切り替え
+    searchBtn.style.display = "none";
+    msgArea.innerText = `あ！ 野生の ${currentMonster.name} が現れた！\nボールを上にスワイプして投げよう！`;
+});
+
+/* --- 3. ドラッグ＆スワイプの操作ロジック --- */
+
+// タッチ・クリック開始
+function dragStart(e) {
+    if (!currentMonster || ball.classList.contains("throwing")) return;
+    isDragging = true;
+    
+    const pageX = e.touches ? e.touches[0].pageX : e.pageX;
+    const pageY = e.touches ? e.touches[0].pageY : e.pageY;
+    
+    // コンテナを基準とした相対座標の計算
+    const rect = container.getBoundingClientRect();
+    startX = pageX - rect.left - (rect.width / 2); // 画面中央を基準（0）とする
+    startY = pageY - rect.top;
+}
+
+// ドラッグ中（指やマウスの動きにボールを追従させる）
+function dragMove(e) {
+    if (!isDragging) return;
+    
+    const pageX = e.touches ? e.touches[0].pageX : e.pageX;
+    const pageY = e.touches ? e.touches[0].pageY : e.pageY;
+    
+    const rect = container.getBoundingClientRect();
+    const currentX = pageX - rect.left - (rect.width / 2);
+    const currentY = pageY - rect.top;
+
+    const deltaX = currentX - startX;
+    const deltaY = currentY - startY;
+
+    // 上方向のドラッグのみボールを動かす（初期位置の中央揃えを維持）
+    if (deltaY < 0) {
+        ball.style.transform = `translateX(-50%) translate(${deltaX}px, ${deltaY}px)`;
+    }
+}
+
+// ドラッグ終了（放り投げる）
+function dragEnd(e) {
+    if (!isDragging) return;
+    isDragging = false;
+
+    const rect = container.getBoundingClientRect();
+    const change = e.changedTouches ? e.changedTouches[0] : e;
+
+    const endX = change.pageX - rect.left - (rect.width / 2);
+    const endY = change.pageY - rect.top;
+
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+
+    // 上方向に60px以上素早く動かしていれば「投げた」と判定
+    if (deltaY < -60) {
+        throwBall(deltaX, deltaY);
+    } else {
+        // スワイプが足りなければ元の位置に戻す
+        ball.style.transform = "translateX(-50%)";
+    }
+}
+
+// 投擲アニメーションの実行
+function throwBall(x, y) {
+    // 飛行する目的地の計算（スワイプの勢いを少し増幅）
+    const targetX = (x * 1.5) + 'px';
+    const targetY = (y * 1.8 - 250) + 'px'; 
+
+    // CSS変数を通じてアニメーションに目的地座標を伝える
+    ball.style.setProperty('--x', targetX);
+    ball.style.setProperty('--y', targetY);
+    ball.classList.add("throwing");
+
+    // アニメーション時間（0.6秒）に合わせて捕獲判定を行う
+    setTimeout(() => {
+        judgeCapture();
+    }, 600);
+}
+
+// 4. 捕獲の成否判定
+function judgeCapture() {
+    const roll = Math.random();
+    
+    if (roll < currentMonster.rate) {
+        // 捕獲成功
+        msgArea.innerText = `やったー！ ${currentMonster.name} を捕まえた！`;
+        monsterImg.style.display = "none"; 
+        setTimeout(resetGame, 1500);
+    } else {
+        // 捕獲失敗（50%の確率で逃走）
+        if (Math.random() < 0.5) {
+            msgArea.innerText = `${currentMonster.name} は逃げてしまった…`;
+            monsterImg.style.display = "none";
+            setTimeout(resetGame, 1500);
+        } else {
+            // 逃げなかった場合は手元にボールがリセットされる
+            msgArea.innerText = "あ！惜しい！捕まらなかった！";
+            ball.classList.remove("throwing");
+            ball.style.transform = "translateX(-50%)";
+            ball.style.display = "flex";
+        }
+    }
+}
+
+// ゲーム状態のリセット
+function resetGame() {
+    currentMonster = null;
+    monsterImg.style.display = "none";
+    ball.style.display = "none";
+    searchBtn.style.display = "inline-block";
+    searchBtn.innerText = "もう一度探す";
+}
+
+// イベントリスナーの登録（PC・スマホ両対応）
+ball.addEventListener("mousedown", dragStart);
+window.addEventListener("mousemove", dragMove);
+window.addEventListener("mouseup", dragEnd);
+
+ball.addEventListener("touchstart", dragStart);
+window.addEventListener("touchmove", dragMove);
+window.addEventListener("touchend", dragEnd);
+
+</script>
+
+</body>
+</html>
